@@ -8,7 +8,6 @@ email_sender = 'error.notifications.script@gmail.com'
 # Ref for app access https://www.youtube.com/watch?v=g_j6ILT-X0k
 email_password = os.environ.get('notification_email_pass')
 email_receiver = 'support@puremoto.co.uk'
-print(email_password)
 
 
 def send_email(subject, body):
