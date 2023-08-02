@@ -1,16 +1,17 @@
-from sqlalchemy import create_engine
 import pandas as pd
 import requests
 import urllib
-import gspread
 import json
 import os
 import concurrent.futures
 from notification import send_email
+from api_data_read_write import *
 
 header = None
-pool = None
-pool.autocommit = True
+# -------------------------------------------------------------------------------------------------------------------------------
+
+# CONNECTION TO PUIG API
+# -------------------------------------------------------------------------------------------------------------------------------
 
 
 def connect_to_api():
@@ -32,19 +33,23 @@ def connect_to_api():
                    f"Authentication to PUIG API failed.\nNo immediate action necessary.\nThe script will auto-retry after a delay.\nDo ensure the script has executed successfully after a while.\n{e}")
         raise e
 
+# -------------------------------------------------------------------------------------------------------------------------------
 
-def connect_to_db():
-    """Connect to the database."""
-    global pool
-    db_host = os.environ.get('INSTANCE_HOST')
-    db_user = os.environ.get('DB_USER')
-    db_pass = os.environ.get('DB_PASS')
-    db_name = os.environ.get('DB_PUIG')
-    db_port = os.environ.get('DB_PORT')
-    connect_string = f"postgresql+psycopg2://{db_user}:{urllib.parse.quote_plus(db_pass)}@{db_host}:{db_port}/{db_name}"
-    try:
-        pool = create_engine(connect_string)
-    except Exception as e:
-        send_email("PUIG API script failed.",
-                   f"Authentication to database failed.\nNo immediate action necessary.\nThe script will auto-retry after a delay.\nDo ensure the script has executed successfully after a while.\n{e}")
-        raise e
+# API REQUESTS TO GET BIKES
+# -------------------------------------------------------------------------------------------------------------------------------
+
+
+def get_bikes():
+    # API request to retreive list of bikes
+    response_bikes = requests.get(
+        'https://api.puig.tv/en/bikes', headers=header)
+    # Convert list of bikes into dataframe
+    bikes_df = pd.DataFrame(response_bikes.json()['data'])
+    bikes_df['puig_final_name'] = bikes_df['brand'].astype(
+        str)+" "+bikes_df['model'].astype(str)+" "+bikes_df['year'].astype(str)
+
+    bikes_df['puig_final_name'] = bikes_df['puig_final_name'].str.replace(
+        '  ', ' ')
+    # db_display(bikes_df, "bikes")
+    sh_write(bikes_df, "PUIG", "bikes")
+    print(bikes_df)
