@@ -11,9 +11,10 @@ if __name__ == '__main__':
     connect_to_serv_acc()
     connect_to_api()
 
+    get_bikes()
     all_threads = []
     # Create a thread for each function
-    for func in [get_bikes, get_categories, get_references]:
+    for func in [get_categories, get_references]:
         t = threading.Thread(target=func)
         all_threads.append(t)
     # Start all the threads
@@ -23,5 +24,6 @@ if __name__ == '__main__':
     for t in all_threads:
         t.join()
 
+    # get_products()
     t1 = time.time()
     print(f"Execution Time: {(t1-t0)/60} minutes")
