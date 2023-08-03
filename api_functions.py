@@ -66,7 +66,7 @@ def get_bikes():
             # Get a list of all the id
             ids = bikes_df['id'].tolist()
             # Append the ids to the string
-            endpoints = ['https://api.puig.tv/es/bikes/' +
+            endpoints = ['https://api.puig.tv/en/bikes/' +
                          str(id) for id in ids]
             # endpoints = ['https://api.puig.tv/en/bikes/8499']
             # Create an empty DataFrame to store the results
@@ -87,8 +87,9 @@ def get_bikes():
                 '  ', ' ')
             db_write(bikes_df, "bikes")
             bikes_df = bikes_df.drop(
-                ['id', 'brand', 'model', 'year', 'reference'], axis=1)
+                ['id', 'brand', 'model', 'year', 'references'], axis=1)
             sh_write(bikes_df, "PUIG", "bikes")
+            print(bikes_df)
     except Exception as e:
         send_email("PUIG API script failed.",
                    f"Function get_bikes() failed.\nNo immediate action necessary.\nThe script will auto-retry after a delay.\nDo ensure the script has executed successfully after a while.\n{e}")
@@ -97,6 +98,17 @@ def get_bikes():
 
 # API REQUESTS TO GET CATEGORIES
 # -------------------------------------------------------------------------------------------------------------------------------
+
+
+def categories_process_endpoint(endpoint):
+    try:
+        # API request to retreive list of product details
+        response_details = requests.get(endpoint, headers=header)
+        if response_details.status_code == 200:
+            df = pd.DataFrame(response_details.json()['data'])
+            return df
+    except:
+        pass
 
 
 def get_categories():
@@ -108,10 +120,30 @@ def get_categories():
             categories_df = pd.DataFrame(response.json()['data'])
             db_write(categories_df, "categories")
             sh_write(categories_df, "PUIG", "categories")
-            print("categories")
+
+            # Get a list of all the id
+            ids = categories_df['id'].tolist()
+            # Append the ids to the string
+            endpoints = ['https://api.puig.tv/en/categories/' +
+                         str(id) for id in ids]
+            # endpoints = ['https://api.puig.tv/en/categories/200498']
+            # Create an empty DataFrame to store the results
+            subcategories_df = pd.DataFrame()
+            # Use a ThreadPoolExecutor to execute the process_endpoint function in parallel threads
+            with concurrent.futures.ThreadPoolExecutor() as executor:
+                # Submit each API endpoint to the executor
+                futures = [executor.submit(
+                    categories_process_endpoint, endpoint) for endpoint in endpoints]
+                # Iterate over each completed future and append the result to the products_df DataFrame
+                for future in concurrent.futures.as_completed(futures):
+                    df = future.result()
+                    subcategories_df = pd.concat(
+                        [subcategories_df, df], axis=0)
+            db_write(subcategories_df, "subcategories")
+            sh_write(subcategories_df, "PUIG", "subcategories")
+            print(subcategories_df)
     except Exception as e:
-        send_email("PUIG API script failed.",
-                   f"Function get_categories() failed.\nNo immediate action necessary.\nThe script will auto-retry after a delay.\nDo ensure the script has executed successfully after a while.\n{e}")
+        # send_email("PUIG API script failed.",   f"Function get_categories() failed.\nNo immediate action necessary.\nThe script will auto-retry after a delay.\nDo ensure the script has executed successfully after a while.\n{e}")
         raise e
 # -------------------------------------------------------------------------------------------------------------------------------
 
