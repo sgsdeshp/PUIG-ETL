@@ -44,28 +44,11 @@ def bikes_process_endpoint(endpoint):
         # API request to retreive list of product details
         response_details = requests.get(endpoint, headers=header)
         if response_details.status_code == 200:
-            data = json.loads(response_details.text)
-            df = pd.DataFrame()
-            df.insert(0, 'id', 'null')
-            df.insert(1, 'brand', 'null')
-            df.insert(2, 'model', 'null')
-            df.insert(3, 'year', 'null')
-            df.insert(4, 'references', 'null')
-
-            df.at[0, 'id'] = str(data['data']['id'])
-            df.at[0, 'brand'] = str(data['data']['brand'])
-            df.at[0, 'model'] = str(data['data']['model'])
-            df.at[0, 'year'] = str(data['data']['year'])
-            df.at[0, 'references'] = str(data['data']['references'])
-
+            # data = json.loads(response_details.text)
+            # df = pd.DataFrame(data['data'])
+            df = pd.DataFrame(response_details.json()['data'])
             # Split the references column into multiple rows
             df = df.explode('references')
-            print(df)
-            # Remove the references column
-            df = df.drop('references', axis=1)
-            # Rename the columns to be SQL friendly
-            df.columns = ['id', 'brand', 'model', 'year', 'reference']
-
             return df
     except:
         pass
@@ -80,18 +63,12 @@ def get_bikes():
         if response.status_code == 200:
             # Convert list of bikes into dataframe
             bikes_df = pd.DataFrame(response.json()['data'])
-            bikes_df['puig_final_name'] = bikes_df['brand'].astype(
-                str)+" "+bikes_df['model'].astype(str)+" "+bikes_df['year'].astype(str)
-
-            bikes_df['puig_final_name'] = bikes_df['puig_final_name'].str.replace(
-                '  ', ' ')
-            db_write(bikes_df, "bikes")
-            sh_write(bikes_df, "PUIG", "bikes")
             # Get a list of all the id
             ids = bikes_df['id'].tolist()
             # Append the ids to the string
-            # endpoints = ['https://api.puig.tv/es/bikes/' + str(id) for id in ids]
-            endpoints = ['https://api.puig.tv/en/bikes/8499']
+            endpoints = ['https://api.puig.tv/es/bikes/' +
+                         str(id) for id in ids]
+            # endpoints = ['https://api.puig.tv/en/bikes/8499']
             # Create an empty DataFrame to store the results
             bikes_df = pd.DataFrame()
             # Use a ThreadPoolExecutor to execute the process_endpoint function in parallel threads
@@ -103,7 +80,15 @@ def get_bikes():
                 for future in concurrent.futures.as_completed(futures):
                     df = future.result()
                     bikes_df = pd.concat([bikes_df, df], axis=0)
-            print(bikes_df)
+            bikes_df['puig_final_name'] = bikes_df['brand'].astype(
+                str)+" "+bikes_df['model'].astype(str)+" "+bikes_df['year'].astype(str)
+
+            bikes_df['puig_final_name'] = bikes_df['puig_final_name'].str.replace(
+                '  ', ' ')
+            db_write(bikes_df, "bikes")
+            bikes_df = bikes_df.drop(
+                ['id', 'brand', 'model', 'year', 'reference'], axis=1)
+            sh_write(bikes_df, "PUIG", "bikes")
     except Exception as e:
         send_email("PUIG API script failed.",
                    f"Function get_bikes() failed.\nNo immediate action necessary.\nThe script will auto-retry after a delay.\nDo ensure the script has executed successfully after a while.\n{e}")

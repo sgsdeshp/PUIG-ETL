@@ -12,7 +12,7 @@ if __name__ == '__main__':
     connect_to_api()
 
     get_bikes()
-    """
+
     all_threads = []
     # Create a thread for each function
     for func in [get_categories, get_references]:
@@ -24,7 +24,7 @@ if __name__ == '__main__':
     # Wait for all threads to finish
     for t in all_threads:
         t.join()
-    """
+
     # get_products()
     t1 = time.time()
     print(f"Execution Time: {(t1-t0)/60} minutes")
