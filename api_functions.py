@@ -43,25 +43,30 @@ def bikes_process_endpoint(endpoint):
     try:
         # API request to retreive list of product details
         response_details = requests.get(endpoint, headers=header)
-        data = json.loads(response_details.text)
-        df = pd.DataFrame()
-        df.insert(0, 'ref_sku', 'null')
-        df.insert(1, 'variations', 'null')
-        df.insert(2, 'category', 'null')
-        df.insert(3, 'description', 'null')
-        df.insert(4, 'bikes', 'null')
-        df.insert(5, 'manual', 'null')
-        df.insert(6, 'aerotest', 'null')
-        df.insert(7, 'comparative', 'null')
-        df.at[0, 'ref_sku'] = str(data['data']['code'])
-        df.at[0, 'variations'] = str(data['data']['variations'])
-        df.at[0, 'category'] = str(data['data']['product'])
-        df.at[0, 'description'] = str(data['data']['groups'])
-        df.at[0, 'bikes'] = str(data['data']['bikes'])
-        df.at[0, 'manual'] = str(data['data']['instructions'])
-        df.at[0, 'aerotest'] = str(data['data']['aerotest'])
-        df.at[0, 'comparative'] = str(data['data']['comparative'])
-        return df
+        if response_details.status_code == 200:
+            data = json.loads(response_details.text)
+            df = pd.DataFrame()
+            df.insert(0, 'id', 'null')
+            df.insert(1, 'brand', 'null')
+            df.insert(2, 'model', 'null')
+            df.insert(3, 'year', 'null')
+            df.insert(4, 'references', 'null')
+
+            df.at[0, 'id'] = str(data['data']['id'])
+            df.at[0, 'brand'] = str(data['data']['brand'])
+            df.at[0, 'model'] = str(data['data']['model'])
+            df.at[0, 'year'] = str(data['data']['year'])
+            df.at[0, 'references'] = str(data['data']['references'])
+
+            # Split the references column into multiple rows
+            df = df.explode('references')
+            print(df)
+            # Remove the references column
+            df = df.drop('references', axis=1)
+            # Rename the columns to be SQL friendly
+            df.columns = ['id', 'brand', 'model', 'year', 'reference']
+
+            return df
     except:
         pass
 
@@ -71,6 +76,7 @@ def get_bikes():
         # API request to retreive list of bikes
         response = requests.get(
             'https://api.puig.tv/en/bikes', headers=header)
+
         if response.status_code == 200:
             # Convert list of bikes into dataframe
             bikes_df = pd.DataFrame(response.json()['data'])
@@ -84,10 +90,20 @@ def get_bikes():
             # Get a list of all the id
             ids = bikes_df['id'].tolist()
             # Append the ids to the string
-            endpoint = ['https://api.puig.tv/es/bikes/' +
-                        str(id) for id in ids]
-
-            print(endpoint)
+            # endpoints = ['https://api.puig.tv/es/bikes/' + str(id) for id in ids]
+            endpoints = ['https://api.puig.tv/en/bikes/8499']
+            # Create an empty DataFrame to store the results
+            bikes_df = pd.DataFrame()
+            # Use a ThreadPoolExecutor to execute the process_endpoint function in parallel threads
+            with concurrent.futures.ThreadPoolExecutor() as executor:
+                # Submit each API endpoint to the executor
+                futures = [executor.submit(
+                    bikes_process_endpoint, endpoint) for endpoint in endpoints]
+                # Iterate over each completed future and append the result to the products_df DataFrame
+                for future in concurrent.futures.as_completed(futures):
+                    df = future.result()
+                    bikes_df = pd.concat([bikes_df, df], axis=0)
+            print(bikes_df)
     except Exception as e:
         send_email("PUIG API script failed.",
                    f"Function get_bikes() failed.\nNo immediate action necessary.\nThe script will auto-retry after a delay.\nDo ensure the script has executed successfully after a while.\n{e}")
