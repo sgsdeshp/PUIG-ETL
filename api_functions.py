@@ -39,10 +39,10 @@ def connect_to_api():
 # -------------------------------------------------------------------------------------------------------------------------------
 
 
-def bikes_process_endpoint(endpoint):
+def bikes_process_endpoint(endpoint, session):
     try:
         # API request to retreive list of product details
-        response_details = requests.get(endpoint, headers=header)
+        response_details = session.get(endpoint, headers=header)
         if response_details.status_code == 200:
             # data = json.loads(response_details.text)
             # df = pd.DataFrame(data['data'])
@@ -56,8 +56,9 @@ def bikes_process_endpoint(endpoint):
 
 def get_bikes():
     try:
+        session = requests.Session()
         # API request to retreive list of bikes
-        response = requests.get(
+        response = session.get(
             'https://api.puig.tv/en/bikes', headers=header)
 
         if response.status_code == 200:
@@ -75,7 +76,7 @@ def get_bikes():
             with concurrent.futures.ThreadPoolExecutor() as executor:
                 # Submit each API endpoint to the executor
                 futures = [executor.submit(
-                    bikes_process_endpoint, endpoint) for endpoint in endpoints]
+                    bikes_process_endpoint, endpoint, session) for endpoint in endpoints]
                 # Iterate over each completed future and append the result to the products_df DataFrame
                 for future in concurrent.futures.as_completed(futures):
                     df = future.result()
@@ -88,6 +89,8 @@ def get_bikes():
             db_write(bikes_df, "bikes")
             bikes_df = bikes_df.drop(
                 ['id', 'brand', 'model', 'year', 'references'], axis=1)
+            bikes_df.drop_duplicates(
+                subset=['puig_final_name'], keep="first", inplace=True)
             sh_write(bikes_df, "PUIG", "bikes")
             print(bikes_df)
     except Exception as e:
@@ -100,10 +103,11 @@ def get_bikes():
 # -------------------------------------------------------------------------------------------------------------------------------
 
 
-def categories_process_endpoint(endpoint):
+def categories_process_endpoint(endpoint, session):
     try:
         # API request to retreive list of product details
-        response_details = requests.get(endpoint, headers=header)
+        response_details = session.get(endpoint, headers=header)
+        # response_details = requests.get(endpoint, headers=header)
         if response_details.status_code == 200:
             df = pd.DataFrame(response_details.json()['data'])
             return df
@@ -113,6 +117,7 @@ def categories_process_endpoint(endpoint):
 
 def get_categories():
     try:
+        session = requests.Session()
         response = requests.get(
             'https://api.puig.tv/en/categories', headers=header)
         if response.status_code == 200:
@@ -133,7 +138,7 @@ def get_categories():
             with concurrent.futures.ThreadPoolExecutor() as executor:
                 # Submit each API endpoint to the executor
                 futures = [executor.submit(
-                    categories_process_endpoint, endpoint) for endpoint in endpoints]
+                    categories_process_endpoint, endpoint, session) for endpoint in endpoints]
                 # Iterate over each completed future and append the result to the products_df DataFrame
                 for future in concurrent.futures.as_completed(futures):
                     df = future.result()

@@ -7,13 +7,13 @@ import threading
 
 if __name__ == '__main__':
     t0 = time.time()
-    # connect_to_db()
-    # connect_to_serv_acc()
+    connect_to_db()
+    connect_to_serv_acc()
     connect_to_api()
 
-    # get_bikes()
+    get_bikes()
     # get_categories()
-    get_products()
+    # get_products()
     """
     all_threads = []
     # Create a thread for each function
