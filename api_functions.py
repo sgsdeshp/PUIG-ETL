@@ -150,10 +150,80 @@ def get_categories():
     except Exception as e:
         # send_email("PUIG API script failed.",   f"Function get_categories() failed.\nNo immediate action necessary.\nThe script will auto-retry after a delay.\nDo ensure the script has executed successfully after a while.\nERROR:{e}")
         raise e
+
 # -------------------------------------------------------------------------------------------------------------------------------
 
-# API REQUESTS TO GET REFERENCES(all REFERENCE sku's)
+# API REQUESTS TO GET PRODUCTS
 # -------------------------------------------------------------------------------------------------------------------------------
+# function to be executed in parallel threads
+
+
+def products_process_endpoint(endpoint, session):
+    try:
+        # API request to retreive list of product details
+        response_details = session.get(endpoint, headers=header)
+        df = pd.DataFrame(
+            columns=['id', 'title', 'description', 'homologation', 'references', 'bikes'])
+        if response_details.status_code == 200:
+            data = json.loads(response_details.text)['data']
+            df.at[0, 'id'] = str(data['id'])
+            df.at[0, 'title'] = str(data['title'])
+            df.at[0, 'description'] = str(data['title'])
+            df.at[0, 'homologation'] = str(data['homologation'])
+            df.at[0, 'references'] = str(data['references'])
+            df.at[0, 'bikes'] = str(data['bikes'])
+            df.at[0, 'technical'] = json.dumps(data['technical'])
+            df.at[0, 'multimedia'] = json.dumps(data['multimedia'])
+            return df
+    except Exception as e:
+        pass
+
+
+def get_products():
+    # Backing current data from the database
+    # sql_query = 'select * from "products";'
+    # products_backup_df = db_read(sql_query)
+    # API request to retreive list of products
+    session = requests.Session()
+    response_products = requests.get(
+        'https://api.puig.tv/en/products', headers=header)
+    # Convert list of products into dataframe
+    products_df = pd.DataFrame(response_products.json()['data'])
+    db_write(products_df, "products")
+    sh_write(products_df, "PUIG", "products")
+    # Get a list of all the id
+    ids = products_df['id'].tolist()
+    # Append the ids to the api request url as a list of strings
+    endpoints = ['https://api.puig.tv/en/products/' + str(id) for id in ids]
+    # endpoints = ['https://api.puig.tv/en/products/1100775']
+    # Create an empty DataFrame to store the results
+    product_details_df = pd.DataFrame()
+    # Use a ThreadPoolExecutor to execute the process_endpoint function in parallel threads
+    with concurrent.futures.ThreadPoolExecutor() as executor:
+        # Submit each API endpoint to the executor
+        futures = [executor.submit(
+            products_process_endpoint, endpoint, session) for endpoint in endpoints]
+        # Iterate over each completed future and append the result to the products_df DataFrame
+        for future in concurrent.futures.as_completed(futures):
+            df = future.result()
+            product_details_df = pd.concat(
+                [product_details_df, df], axis=0)
+
+    # product_details_df = product_details_df.replace(
+    #    {"\[": '', "\]": '', "'": "", "\r": '', "\n": ''}, regex=True)
+    product_details_df['references'] = product_details_df['references'].replace({
+        " ": '', "\[": '', "\]": '', "'": ''}, regex=True)
+    product_details_df['bikes'] = product_details_df['bikes'].replace({
+        " ": '', "\[": '', "\]": '', "'": ''}, regex=True)
+    print(product_details_df)
+    db_write(product_details_df, "product_details")
+    # sh_write(product_details_df, "PUIG", "product_details")
+
+# -------------------------------------------------------------------------------------------------------------------------------
+
+# API REQUESTS TO GET REFERENCE VARIANTS
+# -------------------------------------------------------------------------------------------------------------------------------
+# function to be executed in parallel threads
 
 
 def get_references():
@@ -164,110 +234,65 @@ def get_references():
         if response.status_code == 200:
             # Convert list of references into dataframe
             references_df = pd.DataFrame(response.json()['data'])
-            references_df.rename(columns={0: 'ref_sku'}, inplace=True)
+            references_df.rename(columns={0: 'references'}, inplace=True)
             # Droping known sku with error
             references_df.drop(
-                references_df[references_df.ref_sku == "5020N/G"].index, inplace=True)
+                references_df[references_df.references == "5020N/G"].index, inplace=True)
             references_df.drop_duplicates(
-                subset=['ref_sku'], keep="first", inplace=True)
+                subset=['references'], keep="first", inplace=True)
             db_write(references_df, "references")
             sh_write(references_df, "PUIG", "references")
-            print("references")
+            return references_df
     except Exception as e:
         send_email("PUIG API script failed.",
                    f"Function get_references() failed.\nNo immediate action necessary.\nThe script will auto-retry after a delay.\nDo ensure the script has executed successfully after a while.\nERROR:{e}")
         raise e
-# -------------------------------------------------------------------------------------------------------------------------------
-
-# API REQUESTS TO GET PRODUCTS
-# -------------------------------------------------------------------------------------------------------------------------------
-# function to be executed in parallel threads
 
 
-def products_process_endpoint(endpoint):
+def variants_process_endpoint(endpoint, session):
     try:
         # API request to retreive list of product details
-        response_details = requests.get(endpoint, headers=header)
-        df = pd.DataFrame(columns=['id', 'title', 'description', 'technical', 'homologation',
-                          'references', 'bikes', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', ''])
+        response_details = session.get(endpoint, headers=header)
+        df = pd.DataFrame(
+            columns=['reference', 'product', 'variations', 'groups', 'bikes', 'aerotest', 'comparative', 'instructions'])
         if response_details.status_code == 200:
             data = json.loads(response_details.text)['data']
-            # data = data['data']
-            # Convert the dictionary to a list of key-value pairs
-            records = list(data.items())
-            df = pd.DataFrame.from_records(records, columns=['key', 'value'])
-            # Set the key column as the index
-            df.set_index('key', inplace=True)
+            df.at[0, 'reference'] = str(data['reference'])
+            df.at[0, 'product'] = str(data['product'])
+            df.at[0, 'variations'] = str(data['variations'])
+            df.at[0, 'groups'] = str(data['groups'])
+            df.at[0, 'bikes'] = str(data['bikes'])
+            df.at[0, 'aerotest'] = str(data['aerotest'])
+            df.at[0, 'aerotest'] = str(data['data'])
+            df.at[0, 'comparative'] = str(data['comparative'])
+            df.at[0, 'instructions'] = str(data['instructions'])
             print(df)
-            # Iterate over the keys in the JSON object
-            for key, value in data.items():
-                # Create a new row in the DataFrame
-                # row = {'key': key, 'value': value}
-                # row = {key: value}
-                # print(key, value)
-                # Append the row to the DataFrame
-                # df = pd.DataFrame.from_dict(row)
-                # df = pd.DataFrame(response_details.json()['data'])
-                # return df
-                # print(df)
-                ...
-    except Exception as e:
-        raise e
+            return df
+    except:
+        pass
 
 
-def get_products():
-    # Backing current data from the database
-    # sql_query = 'select * from "products";'
-    # products_backup_df = db_read(sql_query)
-    # API request to retreive list of products
-    response_products = requests.get(
-        'https://api.puig.tv/en/products', headers=header)
-    # Convert list of products into dataframe
-    products_df = pd.DataFrame(response_products.json()['data'])
+def get_variants():
+    session = requests.Session()
+    ref_df = get_references()
     # Get a list of all the id
-    ids = products_df['id'].tolist()
-    # Append the ids to the api request url as a list of strings
-    # endpoints = ['https://api.puig.tv/en/products/' + id for id in ids]
-    endpoints = ['https://api.puig.tv/en/products/1101132']
+    refs = ref_df['references'].tolist()
+    endpoints = ['https://api.puig.tv/en/references/' +
+                 str(ref) for ref in refs]
     # Create an empty DataFrame to store the results
-    product_details_df = pd.DataFrame()
+    variants_df = pd.DataFrame()
     # Use a ThreadPoolExecutor to execute the process_endpoint function in parallel threads
     with concurrent.futures.ThreadPoolExecutor() as executor:
         # Submit each API endpoint to the executor
         futures = [executor.submit(
-            products_process_endpoint, endpoint) for endpoint in endpoints]
+            variants_process_endpoint, endpoint, session) for endpoint in endpoints]
         # Iterate over each completed future and append the result to the products_df DataFrame
         for future in concurrent.futures.as_completed(futures):
             df = future.result()
-            product_details_df = pd.concat(
-                [product_details_df, df], axis=0)
-    # sh_write(product_details_df, "PUIG", "products")
-    """
-    # empty list for url's
-    endpoints = []
-    # appending all url's to endpoints list
-    for i, row in sku_df.iterrows():
-        endpoints.append('https://api.puig.tv/en/products/' + str(row['id']))
-    # Create an empty DataFrame to store the results
-    products_df = pd.DataFrame()
-    # Use a ThreadPoolExecutor to execute the process_endpoint function in parallel threads
-    with concurrent.futures.ThreadPoolExecutor() as executor:
-        # Submit each API endpoint to the executor
-        futures = [executor.submit(
-            products_process_endpoint, endpoint) for endpoint in endpoints]
-        # Iterate over each completed future and append the result to the products_df DataFrame
-        for future in concurrent.futures.as_completed(futures):
-            df = future.result()
-            products_df = pd.concat([products_df, df], axis=0)
-    
-    # products_df = products_df.replace({"\[": '', "\]": '', "'": "", "\r": '', "\n": ''}, regex=True)
-    # products_df['ref_sku'] = products_df['ref_sku'].str.replace(' ', '')
-    # Concatinating the current data with the new data
-    # products_df = pd.concat([products_backup_df, products_df], axis=0)
-    # Droping duplicated products by id
-    # This is done as occationally api calls fail and the products drops completly from the database
-    products_df.drop_duplicates(subset=['id'], keep="last", inplace=True)
-    db_write(products_df, "products")
-    sh_write(products_df, "PUIG", "products")
-    print("products")
-    """
+            variants_df = pd.concat([variants_df, df], axis=0)
+
+    # variants_df['bikes'] = variants_df['bikes'].str.replace(' ', '')
+
+    print(variants_df)
+    db_write(variants_df, "ref_variants")
+    # sh_write(product_details_df, "PUIG", "product_details")
