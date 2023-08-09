@@ -231,6 +231,7 @@ def get_references():
         # API request to retreive list of references
         response = requests.get(
             'https://api.puig.tv/en/references', headers=header)
+
         if response.status_code == 200:
             # Convert list of references into dataframe
             references_df = pd.DataFrame(response.json()['data'])
@@ -240,8 +241,8 @@ def get_references():
                 references_df[references_df.references == "5020N/G"].index, inplace=True)
             references_df.drop_duplicates(
                 subset=['references'], keep="first", inplace=True)
-            db_write(references_df, "references")
-            sh_write(references_df, "PUIG", "references")
+            # db_write(references_df, "references")
+            # sh_write(references_df, "PUIG", "references")
             return references_df
     except Exception as e:
         send_email("PUIG API script failed.",
@@ -254,22 +255,27 @@ def variants_process_endpoint(endpoint, session):
         # API request to retreive list of product details
         response_details = session.get(endpoint, headers=header)
         df = pd.DataFrame(
-            columns=['reference', 'product', 'variations', 'groups', 'bikes', 'aerotest', 'comparative', 'instructions'])
+            columns=['reference', 'product', 'variations', 'title', 'description', 'bikes', 'aerotest', 'comparative', 'instructions'])
         if response_details.status_code == 200:
             data = json.loads(response_details.text)['data']
-            df.at[0, 'reference'] = str(data['reference'])
-            df.at[0, 'product'] = str(data['product'])
-            df.at[0, 'variations'] = str(data['variations'])
-            df.at[0, 'groups'] = str(data['groups'])
+            df.at[0, 'reference'] = str(data['code'])
+            df.at[0, 'product'] = data['product']
+            df.at[0, 'variations'] = data['variations']
+            if data['groups'] == None:
+                df.at[0, 'title'] = None
+                df.at[0, 'description'] = None
+            else:
+                df.at[0, 'title'] = str(data['groups'][0]['title'])
+                df.at[0, 'description'] = str(data['groups'][0]['description'])
             df.at[0, 'bikes'] = str(data['bikes'])
-            df.at[0, 'aerotest'] = str(data['aerotest'])
-            df.at[0, 'aerotest'] = str(data['data'])
-            df.at[0, 'comparative'] = str(data['comparative'])
-            df.at[0, 'instructions'] = str(data['instructions'])
-            print(df)
+            df.at[0, 'aerotest'] = data['aerotest']
+            df.at[0, 'comparative'] = data['comparative']
+            df.at[0, 'instructions'] = data['instructions']
+            df = df.explode('variations')
             return df
-    except:
-        pass
+    except Exception as e:
+        print(str(data['code']), str(data['groups']), type(data['groups']))
+        raise e
 
 
 def get_variants():
@@ -279,6 +285,7 @@ def get_variants():
     refs = ref_df['references'].tolist()
     endpoints = ['https://api.puig.tv/en/references/' +
                  str(ref) for ref in refs]
+    # endpoints = ['https://api.puig.tv/en/references/0013']
     # Create an empty DataFrame to store the results
     variants_df = pd.DataFrame()
     # Use a ThreadPoolExecutor to execute the process_endpoint function in parallel threads
@@ -290,9 +297,11 @@ def get_variants():
         for future in concurrent.futures.as_completed(futures):
             df = future.result()
             variants_df = pd.concat([variants_df, df], axis=0)
-
-    # variants_df['bikes'] = variants_df['bikes'].str.replace(' ', '')
-
-    print(variants_df)
-    db_write(variants_df, "ref_variants")
+    variants_df['bikes'] = variants_df['bikes'].str.replace(' ', '')
+    variants_df = variants_df.replace(
+        {"\[": '', "\]": '', "\{": '', "\}": '', "'": "", "\r": '', "\n": ''}, regex=True)
+    variants_df.insert(
+        0, 'sku', variants_df['reference']+variants_df['variations'])
+    # print(variants_df)
+    db_write(variants_df, "variants")
     # sh_write(product_details_df, "PUIG", "product_details")
