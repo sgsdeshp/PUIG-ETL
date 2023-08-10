@@ -14,7 +14,8 @@ if __name__ == '__main__':
     # get_bikes()
     # get_categories()
     # get_products()
-    get_variants()
+    # get_variants()
+    get_variant_details()
     """
     all_threads = []
     # Create a thread for each function

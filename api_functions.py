@@ -305,3 +305,89 @@ def get_variants():
     # print(variants_df)
     db_write(variants_df, "variants")
     # sh_write(product_details_df, "PUIG", "product_details")
+# -------------------------------------------------------------------------------------------------------------------------------
+
+# API REQUESTS TO GET VARIANT SPECIFICATIONS
+# -------------------------------------------------------------------------------------------------------------------------------
+# function to be executed in parallel threads
+
+
+def variantdetails_process_endpoint(endpoint, session):
+    try:
+        # API request to retreive list of product details
+        response_details = session.get(endpoint, headers=header)
+        if response_details.status_code == 200:
+            data = json.loads(response_details.text)['data']
+            # print(data)
+            # Creating empty dataframe
+            df = pd.DataFrame(columns=['reference', 'colour', 'stock', 'stock_prevision', 'outdated', 'weight', 'height',
+                              'width', 'depth', 'barcode', 'alternative', 'pvp', 'pvp_recomended', 'images', 'videos', 'onbike'])
+            # Inserting appropriate data to dataframe
+            df.at[0, 'reference'] = str(data['code'])
+            df.at[0, 'colour'] = str(data['colour'])
+            df.at[0, 'stock'] = str(data['stock'])
+            df.at[0, 'stock_prevision'] = str(data['stock_prevision'])
+            df.at[0, 'outdated'] = str(data['outdated'])
+            df.at[0, 'weight'] = str(data['weight'])
+            df.at[0, 'height'] = str(data['height'])
+            df.at[0, 'width'] = str(data['width'])
+            df.at[0, 'depth'] = str(data['depth'])
+            df.at[0, 'barcode'] = str(data['barcode'])
+            df.at[0, 'alternative'] = str(data['alternative'])
+            df.at[0, 'pvp'] = str(data['pvp'])
+            df.at[0, 'pvp_recomended'] = str(data['pvp_recomended'])
+            df.at[0, 'images'] = str(data['multimedia']['images'])
+            df.at[0, 'videos'] = str(data['multimedia']['videos'])
+            df.at[0, 'onbike'] = str(data['multimedia']['onbike'])
+            return df
+    except Exception as e:
+        print(str(data['code']))
+        raise e
+
+
+def get_variant_details():
+    session = requests.Session()
+    # Backing current data from the database
+    # sql_query = 'select * from "variants";'
+    # variantspecs_backup_df = db_read(sql_query)
+
+    sql_query = "select sku from variants;"
+    variants_df = db_read(sql_query)
+
+    refs = variants_df['sku'].tolist()
+    endpoints = ['https://api.puig.tv/en/references/' +
+                 str(ref[:-1]) + '/' + str(ref[-1]) for ref in refs]
+    # endpoints = ['https://api.puig.tv/en/references/C15H/A']
+    # Create an empty DataFrame to store the results
+    variant_details_df = pd.DataFrame()
+    # Use a ThreadPoolExecutor to execute the process_endpoint function in parallel threads
+    with concurrent.futures.ThreadPoolExecutor() as executor:
+        # Submit each API endpoint to the executor
+        futures = [executor.submit(
+            variantdetails_process_endpoint, endpoint, session) for endpoint in endpoints]
+        # Iterate over each completed future and append the result to the products_df DataFrame
+        for future in concurrent.futures.as_completed(futures):
+            df = future.result()
+            variant_details_df = pd.concat([variant_details_df, df], axis=0)
+    print("1111111111111111111111111")
+    variant_details_df.insert(
+        0, 'sku', variant_details_df['reference']+variant_details_df['colour'])
+    variant_details_df["pvp"] = variant_details_df["pvp"].astype(float)
+    variant_details_df["cost"] = round(variant_details_df['pvp']*0.495)
+    variant_details_df['rrp'] = round(variant_details_df['pvp']*1.21*0.88)-0.01
+    print(variant_details_df)
+    variant_details_df.info(memory_usage="deep")
+    """variantspecs_df = variantspecs_df.fillna('0')
+    variantspecs_df = variantspecs_df.replace(
+        {"\[": '', "\]": '', "'": "", "\r": '', "\n": ''}, regex=True)
+    variantspecs_df['ref_sku'] = variantspecs_df.sku.str[:-1]
+    variantspecs_df["pvp"] = variantspecs_df["pvp"].astype(float)
+    variantspecs_df['rrp'] = round(variantspecs_df['pvp']*1.21*0.88)-0.01
+    # Concatinating the current data with the new data
+    variantspecs_df = pd.concat(
+        [variantspecs_backup_df, variantspecs_df], axis=0)
+    # Droping duplicated products by id
+    # This is done as occationally api calls fail and the products drops completly from the database
+    variantspecs_df.drop_duplicates(subset=['sku'], keep="last", inplace=True)
+    print("variantspecs")
+    print("finished")"""
