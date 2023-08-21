@@ -336,9 +336,10 @@ def variantdetails_process_endpoint(endpoint, session):
             df.at[0, 'alternative'] = str(data['alternative'])
             df.at[0, 'pvp'] = str(data['pvp'])
             df.at[0, 'pvp_recomended'] = str(data['pvp_recomended'])
+            # df.at[0, 'multimedia'] = str(data['multimedia'])
             df.at[0, 'images'] = str(data['multimedia']['images'])
             df.at[0, 'videos'] = str(data['multimedia']['videos'])
-            df.at[0, 'onbike'] = str(data['multimedia']['onbike'])
+            df.at[0, 'onbike'] = str(data['multimedia']['onbike'])[1:-1]
             return df
     except Exception as e:
         print(str(data['code']))
@@ -357,7 +358,7 @@ def get_variant_details():
     refs = variants_df['sku'].tolist()
     endpoints = ['https://api.puig.tv/en/references/' +
                  str(ref[:-1]) + '/' + str(ref[-1]) for ref in refs]
-    # endpoints = ['https://api.puig.tv/en/references/C15H/A']
+    # endpoints = ['https://api.puig.tv/en/references/0009/W']
     # Create an empty DataFrame to store the results
     variant_details_df = pd.DataFrame()
     # Use a ThreadPoolExecutor to execute the process_endpoint function in parallel threads
@@ -369,13 +370,27 @@ def get_variant_details():
         for future in concurrent.futures.as_completed(futures):
             df = future.result()
             variant_details_df = pd.concat([variant_details_df, df], axis=0)
-    print("1111111111111111111111111")
+    # Inserting sku column, combining ref shu to colour
     variant_details_df.insert(
         0, 'sku', variant_details_df['reference']+variant_details_df['colour'])
-    variant_details_df["pvp"] = variant_details_df["pvp"].astype(float)
-    variant_details_df["cost"] = round(variant_details_df['pvp']*0.495)
-    variant_details_df['rrp'] = round(variant_details_df['pvp']*1.21*0.88)-0.01
+    # Converting datatype of column (string to float)
+    variant_details_df["pvp_recomended"] = variant_details_df["pvp_recomended"].astype(
+        float)
+    # Converting datatype of column (string to float)
+    variant_details_df["pvp"] = variant_details_df["pvp"].astype(
+        float)
+    # Calculating Cost
+    variant_details_df["cost"] = variant_details_df['pvp']*0.495
+    # Calculating RRP
+    variant_details_df['rrp'] = round(
+        variant_details_df['pvp']*1.21*0.88)-0.01
     print(variant_details_df)
+    # variant_details_df['onbike'] = variant_details_df['onbike'].to_json()
+    # variant_details_df['onbike'] = json.dumps(variant_details_df['onbike'])
+    variant_details_df = variant_details_df.replace(
+        {"'": '"', "None": "null"}, regex=True)
+    print(variant_details_df)
+    db_write(variant_details_df, "variant_details")
     variant_details_df.info(memory_usage="deep")
     """variantspecs_df = variantspecs_df.fillna('0')
     variantspecs_df = variantspecs_df.replace(
@@ -391,3 +406,5 @@ def get_variant_details():
     variantspecs_df.drop_duplicates(subset=['sku'], keep="last", inplace=True)
     print("variantspecs")
     print("finished")"""
+# ALTER TABLE variant_details
+# ALTER COLUMN onbike TYPE JSONB USING onbike::jsonb;
