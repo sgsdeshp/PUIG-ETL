@@ -342,8 +342,16 @@ def variantdetails_process_endpoint(endpoint, session):
             df.at[0, 'onbike'] = str(data['multimedia']['onbike'])[1:-1]
             return df
     except Exception as e:
-        print(str(data['code']))
-        raise e
+        if response_details.status_code != 200:
+            print(
+                f"The API returned an error code: {response_details.status_code}.\nReconnecting to API...")
+            connect_to_api()
+            print("Reconnected to API.")
+            return variantdetails_process_endpoint(endpoint, session)
+        else:
+            # print(str(data['code']))
+            print(endpoint)
+            raise e
 
 
 def get_variant_details():
@@ -384,7 +392,7 @@ def get_variant_details():
     # Calculating RRP
     variant_details_df['rrp'] = round(
         variant_details_df['pvp']*1.21*0.88)-0.01
-    print(variant_details_df)
+    # print(variant_details_df)
     # variant_details_df['onbike'] = variant_details_df['onbike'].to_json()
     # variant_details_df['onbike'] = json.dumps(variant_details_df['onbike'])
     variant_details_df = variant_details_df.replace(
