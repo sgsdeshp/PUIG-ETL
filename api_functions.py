@@ -315,13 +315,13 @@ def get_variants():
 def variantdetails_process_endpoint(endpoint, session):
     try:
         # API request to retreive list of product details
-        response_details = session.get(endpoint, headers=header)
+        response_details = requests.get(endpoint, headers=header)
         if response_details.status_code == 200:
             data = json.loads(response_details.text)['data']
             # print(data)
             # Creating empty dataframe
             df = pd.DataFrame(columns=['reference', 'colour', 'stock', 'stock_prevision', 'outdated', 'weight', 'height',
-                              'width', 'depth', 'barcode', 'alternative', 'pvp', 'pvp_recomended', 'images', 'videos', 'onbike'])
+                              'width', 'depth', 'barcode', 'alternative', 'pvp', 'pvp_recomended', 'multimedia', 'origin', 'hs_code'])
             # Inserting appropriate data to dataframe
             df.at[0, 'reference'] = str(data['code'])
             df.at[0, 'colour'] = str(data['colour'])
@@ -336,22 +336,25 @@ def variantdetails_process_endpoint(endpoint, session):
             df.at[0, 'alternative'] = str(data['alternative'])
             df.at[0, 'pvp'] = str(data['pvp'])
             df.at[0, 'pvp_recomended'] = str(data['pvp_recomended'])
-            # df.at[0, 'multimedia'] = str(data['multimedia'])
-            df.at[0, 'images'] = str(data['multimedia']['images'])
-            df.at[0, 'videos'] = str(data['multimedia']['videos'])
-            df.at[0, 'onbike'] = str(data['multimedia']['onbike'])[1:-1]
+            df.at[0, 'multimedia'] = str(data['multimedia'])
+            df.at[0, 'origin'] = str(data['origin'])
+            df.at[0, 'hs_code'] = str(data['hs_code'])
+            # df.at[0, 'images'] = str(data['multimedia']['images'])
+            # df.at[0, 'videos'] = str(data['multimedia']['videos'])
+            # df.at[0, 'onbike'] = str(data['multimedia']['onbike'])[1:-1]
             return df
     except Exception as e:
+        """
         if response_details.status_code != 200:
             print(
                 f"The API returned an error code: {response_details.status_code}.\nReconnecting to API...")
             connect_to_api()
             print("Reconnected to API.")
             return variantdetails_process_endpoint(endpoint, session)
-        else:
-            # print(str(data['code']))
-            print(endpoint)
-            raise e
+        else:"""
+        # print(str(data['code']))
+        print(endpoint, e)
+        pass
 
 
 def get_variant_details():
@@ -366,7 +369,7 @@ def get_variant_details():
     refs = variants_df['sku'].tolist()
     endpoints = ['https://api.puig.tv/en/references/' +
                  str(ref[:-1]) + '/' + str(ref[-1]) for ref in refs]
-    # endpoints = ['https://api.puig.tv/en/references/0009/W']
+    # endpoints = ['https://api.puig.tv/en/references/3755/N', 'https://api.puig.tv/en/references/3755/H', 'https://api.puig.tv/en/references/3755/W']
     # Create an empty DataFrame to store the results
     variant_details_df = pd.DataFrame()
     # Use a ThreadPoolExecutor to execute the process_endpoint function in parallel threads
@@ -378,7 +381,7 @@ def get_variant_details():
         for future in concurrent.futures.as_completed(futures):
             df = future.result()
             variant_details_df = pd.concat([variant_details_df, df], axis=0)
-    # Inserting sku column, combining ref shu to colour
+    # Inserting sku column, combining ref sku & colour
     variant_details_df.insert(
         0, 'sku', variant_details_df['reference']+variant_details_df['colour'])
     # Converting datatype of column (string to float)
@@ -391,13 +394,14 @@ def get_variant_details():
     variant_details_df["cost"] = variant_details_df['pvp']*0.495
     # Calculating RRP
     variant_details_df['rrp'] = round(
-        variant_details_df['pvp']*1.21*0.88)-0.01
+        variant_details_df['pvp']*1.21*0.86)-0.01
     # print(variant_details_df)
     # variant_details_df['onbike'] = variant_details_df['onbike'].to_json()
     # variant_details_df['onbike'] = json.dumps(variant_details_df['onbike'])
     variant_details_df = variant_details_df.replace(
         {"'": '"', "None": "null"}, regex=True)
-    print(variant_details_df)
+    print("variant_details_complete")
+    connect_to_db()
     db_write(variant_details_df, "variant_details")
     variant_details_df.info(memory_usage="deep")
     """variantspecs_df = variantspecs_df.fillna('0')
@@ -415,4 +419,4 @@ def get_variant_details():
     print("variantspecs")
     print("finished")"""
 # ALTER TABLE variant_details
-# ALTER COLUMN onbike TYPE JSONB USING onbike::jsonb;
+# ALTER COLUMN multimedia TYPE JSONB USING multimedia::jsonb;

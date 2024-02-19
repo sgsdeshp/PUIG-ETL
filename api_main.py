@@ -11,11 +11,12 @@ if __name__ == '__main__':
     connect_to_serv_acc()
     connect_to_api()
 
-    # get_bikes()
-    # get_categories()
-    # get_products()
-    # get_variants()
+    get_bikes()
+    get_categories()
+    get_products()
+    get_variants()
     get_variant_details()
+    #test_get_variant_details()
     """
     all_threads = []
     # Create a thread for each function
