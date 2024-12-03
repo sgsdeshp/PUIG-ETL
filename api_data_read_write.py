@@ -127,8 +127,10 @@ def db_write(df, table):
     """
     # writing data to db
     with pool.connect() as connection:
-        df.to_sql(table, con=connection, if_exists='replace', index=False)
-        connection.close()
+        try:
+            df.to_sql(table, con=connection, if_exists='replace', index=False)
+        finally:
+            connection.close()
 
 
 def db_read(sql_query):
